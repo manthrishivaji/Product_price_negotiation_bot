@@ -14,4 +14,5 @@ pip install -r requirements.txt
 # run the application in terminal type
 python app.py
 
-# open a browser and type "http://localhost:8000/docs" that's it.
+# open a browser and type 
+"http://localhost:8000/docs" that's it.
