@@ -29,19 +29,16 @@ if not api_key:
 llm = HuggingFaceEndpoint(
     endpoint_url="https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
     task="text-generation",
-    max_length=10,
+    max_length=50,
     temperature=0.4,
+    stop=["\n", "End of response"],
     huggingfacehub_api_token=api_key,
 )
 
 min_price = 190
 max_price = 200
 current_price = max_price
-# You are a skilled salesperson negotiating the price of a product. 
-#     The customer said: "{user_message}"
-#     Your current asking price is ${current_price}
-#     You want to make a counteroffer of ${counter_offer}
-#     The customer's message sentiment is {sentiment} (positive, neutral, or negative). 
+
 prompt_template = PromptTemplate(
     input_variables=["user_message", "current_price", "counter_offer", "sentiment"],
     template="""
@@ -78,6 +75,18 @@ def analyze_sentiment(text):
         return "negative"
     else:
         return "neutral"
+    
+def is_price_reduction_request(text):
+    reduction_keywords = [
+        "reduce", "lower", "drop", "cut", "decrease", "bring down", 
+        "a little bit", "a discount", "meet in the middle", "better deal", "less"
+    ]
+    # Check if any of the keywords are in the user's message
+    for word in reduction_keywords:
+        if word in text.lower():
+            return True
+    return False
+
 
 @app.post('/negotiate')
 async def negotiate(offer: Offer):
@@ -85,35 +94,47 @@ async def negotiate(offer: Offer):
     user_message = offer.message
     extracted_price = extract_price(user_message)
     sentiment = analyze_sentiment(user_message)
-
-    if extracted_price is not None:
+    
+    # Detect if the user is asking for a price reduction
+    if is_price_reduction_request(user_message):
+        extracted_price = None  # Treat it as a negotiation request instead of an offer
+    
+    if extracted_price is None:
+        base_counter_offer = round(random.uniform(min_price, current_price), 2)
+    else:
         user_offer = extracted_price
+        
         if user_offer >= current_price:
             response = f"Great! We have a deal. The price is agreed at ${user_offer}"
-            current_price = max_price
+            current_price = max_price  # Reset for next negotiation
             return {"response": response, "current_price": current_price, "detected_sentiment": sentiment}
+        
         elif user_offer < min_price:
-            response = f"I'm sorry, but that offer is too low. Our minimum price is ${min_price}"
+            response = f"I'm sorry, but that offer is too low. Our minimum price is ${min_price}."
             return {"response": response, "current_price": current_price, "detected_sentiment": sentiment}
 
-    base_counter_offer = round(random.uniform(max(min_price, extracted_price or min_price), current_price), 2)
-
+    # Generate a counteroffer based on the sentiment
     if sentiment == "positive":
-        counter_offer = max(min_price, base_counter_offer * 0.95)
+        counter_offer = max(min_price, base_counter_offer * 0.95)  # 5% discount for positive sentiment
     else:
-        counter_offer = base_counter_offer
+        counter_offer = base_counter_offer  # Neutral or negative sentiment offers a smaller reduction
     
     counter_offer = round(counter_offer, 2)
-
+    
     try:
-        ai_response = chain.run(user_message=user_message, current_price=current_price, counter_offer=counter_offer, sentiment=sentiment)
-        logging.debug(f"Raw AI response: {ai_response}")
-        response = ai_response.replace("Your response:", "").strip()
+        ai_response = chain.run(
+            user_message=user_message,
+            current_price=current_price,
+            counter_offer=counter_offer,
+            sentiment=sentiment
+        )
+        response = ai_response.strip()
     except Exception as e:
-        logging.error(f"Error generating AI response: {e}")
-        response = f"Thank you for your message. Our current price is ${current_price}. How about we meet in the middle at ${counter_offer}?"
+        print(f"Error generating AI response: {e}")
+        response = f"Thank you for your message. Our current price is ${current_price}. How about we meet at ${counter_offer}?"
     
     current_price = counter_offer
+    
     return {"response": response, "current_price": current_price, "detected_sentiment": sentiment}
 
 if __name__ == '__main__':
