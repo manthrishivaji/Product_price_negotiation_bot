@@ -1,7 +1,9 @@
 # instructions to successfully run the repo
   clone copy the repo
+# add your Huggingface api key 
 in .env file add your huggingface write api key without quotes
-  go to terminal and select command prompt
+
+go to terminal and select command prompt
 
 # create a conda environment
 conda create -n myenv python=3.9
