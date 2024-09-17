@@ -38,7 +38,11 @@ llm = HuggingFaceEndpoint(
 min_price = 190
 max_price = 200
 current_price = max_price
-
+# You are a skilled salesperson negotiating the price of a product. 
+#     The customer said: "{user_message}"
+#     Your current asking price is ${current_price}
+#     You want to make a counteroffer of ${counter_offer}
+#     The customer's message sentiment is {sentiment} (positive, neutral, or negative). 
 prompt_template = PromptTemplate(
     input_variables=["user_message", "current_price", "counter_offer", "sentiment"],
     template="""
@@ -92,48 +96,53 @@ def is_price_reduction_request(text):
 async def negotiate(offer: Offer):
     global current_price
     user_message = offer.message
-    extracted_price = extract_price(user_message)
-    sentiment = analyze_sentiment(user_message)
+    extracted_price = extract_price(user_message)  # Attempt to extract a price from the user's message
+    sentiment = analyze_sentiment(user_message)  # Analyze sentiment of the user's message
     
-    # Detect if the user is asking for a price reduction
-    if is_price_reduction_request(user_message):
-        extracted_price = None  # Treat it as a negotiation request instead of an offer
-    
-    if extracted_price is None:
-        base_counter_offer = round(random.uniform(min_price, current_price), 2)
-    else:
+    # Check if a price was extracted from the user's message
+    if extracted_price is not None:
         user_offer = extracted_price
         
+        # Check if the user's offer is greater than or equal to the current price
         if user_offer >= current_price:
             response = f"Great! We have a deal. The price is agreed at ${user_offer}"
-            current_price = max_price  # Reset for next negotiation
+            current_price = max_price  # Reset for the next negotiation
             return {"response": response, "current_price": current_price, "detected_sentiment": sentiment}
         
+        # If the user's offer is below the minimum price, reject it
         elif user_offer < min_price:
-            response = f"I'm sorry, but that offer is too low. Our minimum price is ${min_price}."
+            response = f"I'm sorry, but that offer is too low. Our minimum price is ${min_price}"
             return {"response": response, "current_price": current_price, "detected_sentiment": sentiment}
-
-    # Generate a counteroffer based on the sentiment
+        
+        # Otherwise, use the user's offer as the base for the counter-offer
+        base_counter_offer = round(user_offer, 2)
+    else:
+        # If no price was extracted, default to using the current price as the base for the counter-offer
+        base_counter_offer = current_price
+    
+    # Adjust the counter-offer based on sentiment
     if sentiment == "positive":
         counter_offer = max(min_price, base_counter_offer * 0.95)  # 5% discount for positive sentiment
     else:
-        counter_offer = base_counter_offer  # Neutral or negative sentiment offers a smaller reduction
+        counter_offer = base_counter_offer  # No discount for neutral or negative sentiment
     
-    counter_offer = round(counter_offer, 2)
+    counter_offer = round(counter_offer, 2)  # Round the counter-offer to two decimal places
     
     try:
+        # Run the AI model to generate a response
         ai_response = chain.run(
             user_message=user_message,
             current_price=current_price,
             counter_offer=counter_offer,
             sentiment=sentiment
         )
-        response = ai_response.strip()
+        
+        response = ai_response.strip()  # Clean up the response from the model
     except Exception as e:
         print(f"Error generating AI response: {e}")
-        response = f"Thank you for your message. Our current price is ${current_price}. How about we meet at ${counter_offer}?"
+        response = f"Thank you for your message. Our current price is ${current_price}. How about we meet in the middle at ${counter_offer}?"
     
-    current_price = counter_offer
+    current_price = counter_offer  # Update the current price based on the counter-offer
     
     return {"response": response, "current_price": current_price, "detected_sentiment": sentiment}
 
