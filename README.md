@@ -1,3 +1,5 @@
+Basic Customer_negotiation_bot
+
 # instructions to successfully run the repo
   clone copy the repo
 # add your Huggingface api key 
