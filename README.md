@@ -1,4 +1,4 @@
-Basic Customer_negotiation_bot
+Basic Product_price_Customer_negotiation_bot
 
 # instructions to successfully run the repo
   clone copy the repo
